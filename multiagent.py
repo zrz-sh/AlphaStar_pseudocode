@@ -171,8 +171,7 @@ class MainPlayer(Player):
     if self._payoff[self, opponent] > 0.3:
       return opponent, False
 
-    # If opponent is too strong, look for a checkpoint
-    # as curriculum
+    # If opponent is too strong, look for a checkpoint as curriculum
     historical = [
         player for player in self._payoff.players
         if isinstance(player, Historical) and player.parent == opponent
@@ -183,18 +182,18 @@ class MainPlayer(Player):
 
   def _verification_branch(self, opponent):
     # Check exploitation
-    exploiters = set([
+    main_exploiters = set([
         player for player in self._payoff.players
         if isinstance(player, MainExploiter)
     ])
-    exp_historical = [
+    main_exploiters_historical = [
         player for player in self._payoff.players
-        if isinstance(player, Historical) and player.parent in exploiters
+        if isinstance(player, Historical) and player.parent in main_exploiters
     ]
-    win_rates = self._payoff[self, exp_historical]
+    win_rates = self._payoff[self, main_exploiters_historical]
     if len(win_rates) and win_rates.min() < 0.3:
       return np.random.choice(
-          exp_historical, p=pfsp(win_rates, weighting="squared")), True
+          main_exploiters_historical, p=pfsp(win_rates, weighting="squared")), True
 
     # Check forgetting
     historical = [
@@ -214,17 +213,17 @@ class MainPlayer(Player):
 
     # Make sure you can beat the League
     if coin_toss < 0.5:
-      return self._pfsp_branch()
+      return self._pfsp_branch() # 50% PFSP against all past players in the league
 
     main_agents = [
         player for player in self._payoff.players
         if isinstance(player, MainPlayer)
     ]
-    opponent = np.random.choice(main_agents)
+    opponent = np.random.choice(main_agents) # 35%/50% SP against main agents
 
     # Verify if there are some rare players we omitted
-    if coin_toss < 0.5 + 0.15:
-      request = self._verification_branch(opponent)
+    if coin_toss < 0.5 + 0.15: # 0.5 < coin_toss < 0.65
+      request = self._verification_branch(opponent) # 15% PFSP against forgotten main players
       if request is not None:
         return request
 
@@ -263,9 +262,10 @@ class MainExploiter(Player):
     ]
     opponent = np.random.choice(main_agents)
 
-    if self._payoff[self, opponent] > 0.1:
+    if self._payoff[self, opponent] > 0.2:
       return opponent, True
 
+    # else utilize curriculum learning through PFSP with f_{var} weighting over players created by the main agents
     historical = [
         player for player in self._payoff.players
         if isinstance(player, Historical) and player.parent == opponent
@@ -335,7 +335,7 @@ class Historical(Player):
     self._agent = Agent(agent.race, agent.get_weights())
     self._payoff = payoff
     self._race = agent.race
-    self._parent = agent
+    self._parent = agent # Historical类在初始化时保存了对agent的引用，如果agent对象发生了改变，仍然可以访问到这个agent
 
   @property
   def parent(self):
